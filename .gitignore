@@ -1,0 +1,10 @@
+# IDE Configurations
+.idea/
+# Python Cache
+__pycache__/
+# Program output
+/*.exr
+/*.pt
+output/
+dataset/
+checkpoint/
