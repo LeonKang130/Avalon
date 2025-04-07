@@ -49,7 +49,7 @@ def evaluate_triangle_list(triangle_list: TriangleList, wi: torch.Tensor, wo: to
 def visualize_triangle_list(triangle_list: TriangleList, square_resolution: int, device: torch.device):
     ws = generate_visualization_ws(square_resolution, device)
     image = evaluate_triangle_list(triangle_list, ws[..., :3], ws[..., 3:])
-    save_exr_image(image.reshape(square_resolution ** 2, square_resolution ** 2, -1), "output/simulation.exr")
+    save_exr_image(image.reshape(square_resolution ** 2, square_resolution ** 2, -1), "dataset/simulation.exr")
 
 def generate_simulation_dataset(triangle_list, sphere_resolution: int, device: torch.device):
     dataset = torch.empty(sphere_resolution * sphere_resolution, 9, dtype=torch.float32)
