@@ -38,8 +38,12 @@ class Decoder(nn.Module):
         t = t / (torch.linalg.norm(t, dim=-1).unsqueeze(-1) + 1e-6)
         b = torch.linalg.cross(n, t)
         onb = torch.hstack((t, b, n)).reshape(latent_code.shape[:-1] + (6, 3))
-        ws_local = torch.einsum("...ij,...kj->...ki", onb, ws).reshape(latent_code.shape[:-1] + (-1,))
-        return self.fc(torch.hstack((ws_local, latent_code[..., 12:])))
+        ws_local = torch.einsum("...ij,...kj->...ki", onb, ws).reshape(ws.shape[:-2] + (-1,))
+        if ws_local.shape[:-1] == latent_code.shape[:-1]:
+            x = torch.hstack((ws_local, latent_code[..., 12:]))
+        else:
+            x = torch.hstack((ws_local, latent_code[..., 12:].unsqueeze(0).expand(ws_local.shape[:-1] + (-1,))))
+        return self.fc(x)
 
 
 class Avalon(nn.Module):

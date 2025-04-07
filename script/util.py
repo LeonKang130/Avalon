@@ -83,6 +83,16 @@ def fit_sh_coefficients(ws: torch.Tensor, ys: torch.Tensor) -> torch.Tensor:
     return torch.linalg.lstsq(evaluate_sh(ws), ys, rcond=None).solution
 
 @torch.jit.script
+def evaluate_disney_lambda(roughness2: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
+    tan2theta = torch.square(w[..., 2])
+    tan2theta = torch.where(tan2theta < 1e-6, 0, (1 - tan2theta) / tan2theta)
+    return (-1 + torch.sqrt(1 + roughness2 * tan2theta)) * 0.5
+
+@torch.jit.script
+def evaluate_disney_d(roughness2, w: torch.Tensor) -> torch.Tensor:
+    return roughness2 / (torch.pi * torch.square(1 + (roughness2 - 1) * w[..., 2] * w[..., 2]) + 1e-6)
+
+@torch.jit.script
 def evaluate_octahedron(uv: torch.Tensor) -> torch.Tensor:
     uv = 2 * uv - 1
     uvp = torch.abs(uv)

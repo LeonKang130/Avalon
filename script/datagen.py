@@ -24,31 +24,6 @@ def evaluate_sggx(eigenvectors: torch.Tensor, eigenvalues: torch.Tensor, ws: tor
     return 1 / torch.square(s.sum(-1))
 
 @torch.jit.script
-def evaluate_disney_lambda(roughness2: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
-    tan2theta = torch.square(w[..., 2])
-    tan2theta = torch.where(tan2theta < 1e-6, 0, (1 - tan2theta) / tan2theta)
-    return (-1 + torch.sqrt(1 + roughness2 * tan2theta)) * 0.5
-
-@torch.jit.script
-def evaluate_disney_d(roughness2, w: torch.Tensor) -> torch.Tensor:
-    return roughness2 / (torch.pi * torch.square(1 + (roughness2 - 1) * w[..., 2] * w[..., 2]) + 1e-6)
-
-@torch.jit.script
-def evaluate_disney_bsdf(metallic: torch.Tensor, roughness: torch.Tensor, ior: torch.Tensor, base_color: torch.Tensor, wi_local: torch.Tensor, wo_local: torch.Tensor) -> torch.Tensor:
-    roughness2 = torch.square(roughness)
-    wh = wi_local + wo_local
-    wh /= torch.linalg.norm(wh, dim=-1).unsqueeze(-1) + 1e-6
-    fc = torch.pow(1.0 - (wi_local * wh).sum(-1), 5)
-    reflectance = torch.square((ior - 1) / (ior + 1))
-    f0 = metallic.unsqueeze(-1) * base_color + ((1 - metallic) * reflectance).unsqueeze(-1)
-    f = f0 + fc.unsqueeze(-1) * (1 - f0)
-    specular_bsdf = (evaluate_disney_d(roughness2, wh) / (1 + evaluate_disney_lambda(roughness2, wi_local) + evaluate_disney_lambda(roughness2, wo_local))).unsqueeze(-1) * f
-    specular_bsdf /= 4 * torch.abs(wi_local[..., -1:] * wo_local[..., -1:]) + 1e-6
-    front_facing = torch.where(torch.minimum(wi_local[..., -1:], wo_local[..., -1:]) > 0, 1, 0)
-    diffuse_bsdf = ((1 - metallic).unsqueeze(-1) / torch.pi) * base_color
-    return (diffuse_bsdf + specular_bsdf) * front_facing
-
-@torch.jit.script
 def sample_sggx_vndf(u: torch.Tensor, eigenvectors: torch.Tensor, eigenvalues: torch.Tensor, ws: torch.Tensor) -> torch.Tensor:
     num_samples = u.shape[0] // ws.shape[0]
     s = eigenvectors.T @ torch.diag(eigenvalues) @ eigenvectors
@@ -67,6 +42,22 @@ def sample_sggx_vndf(u: torch.Tensor, eigenvectors: torch.Tensor, eigenvalues: t
     ns = ns @ torch.stack((mk, mj, mi), dim=-2)
     ns.div_(torch.linalg.norm(ns, dim=-1).unsqueeze(-1) + 1e-6)
     return ns
+
+@torch.jit.script
+def evaluate_disney_bsdf(metallic: torch.Tensor, roughness: torch.Tensor, ior: torch.Tensor, base_color: torch.Tensor, wi_local: torch.Tensor, wo_local: torch.Tensor) -> torch.Tensor:
+    roughness2 = torch.square(roughness)
+    wh = wi_local + wo_local
+    wh /= torch.linalg.norm(wh, dim=-1).unsqueeze(-1) + 1e-6
+    fc = torch.pow(1.0 - (wi_local * wh).sum(-1), 5)
+    reflectance = torch.square((ior - 1) / (ior + 1))
+    f0 = metallic.unsqueeze(-1) * base_color + ((1 - metallic) * reflectance).unsqueeze(-1)
+    f = f0 + fc.unsqueeze(-1) * (1 - f0)
+    d = evaluate_disney_d(roughness2, wh)
+    g = 1.0 / (1.0 + evaluate_disney_lambda(roughness2, wi_local) + evaluate_disney_lambda(roughness2, wo_local))
+    specular_bsdf = (d * g).unsqueeze(-1) * f / (4 * torch.abs(wi_local[..., -1:] * wo_local[..., -1:]) + 1e-6)
+    diffuse_bsdf = ((1 - metallic).unsqueeze(-1) / torch.pi) * base_color
+    front_facing = torch.where(torch.minimum(wi_local[..., -1:], wo_local[..., -1:]) > 0, 1, 0)
+    return (diffuse_bsdf + specular_bsdf) * front_facing
 
 def evaluate_aggregate(eigenvectors: torch.Tensor, eigenvalues: torch.Tensor, bsdf_sh_coefficients: torch.Tensor, wi: torch.Tensor, wo: torch.Tensor, num_samples: int = 32, batch_size: int = 1024) -> torch.Tensor:
     evaluation = torch.empty(wi.shape[:-1] + (3,), dtype=torch.float32, device=wi.device)
@@ -134,7 +125,7 @@ def generate_validation_dataset(square_resolution: int, device: torch.device):
 def main():
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is not available.")
-    parser = argparse.ArgumentParser(description="dataset generator")
+    parser = argparse.ArgumentParser(description="Dataset generation script")
     parser.add_argument("--validation", action="store_true", help="generate validation dataset")
     parser.add_argument("--pretraining", action="store_true", help="generate pretraining dataset")
     parser.add_argument("--num_aggregate", type=int, default=4096, help="number of aggregates")

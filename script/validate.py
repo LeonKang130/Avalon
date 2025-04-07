@@ -6,8 +6,8 @@ import argparse
 @timeit
 def load_model(encoder_path: str, decoder_path: str) -> Avalon:
     model = Avalon()
-    model.encoder.load_state_dict(torch.load(encoder_path))
-    model.decoder.load_state_dict(torch.load(decoder_path))
+    model.encoder.load_state_dict(torch.load(encoder_path, weights_only=True))
+    model.decoder.load_state_dict(torch.load(decoder_path, weights_only=True))
     return model
 
 @timeit
@@ -21,7 +21,7 @@ def validate(model: Avalon, dataset: torch.Tensor, criterion: torch.nn.Module) -
         save_exr_image(prediction.exp_().sub_(1.0).reshape(32 ** 2, 32 ** 2, -1), f"output/validation.exr")
 
 def main():
-    parser = argparse.ArgumentParser(description="Checkpoint validator")
+    parser = argparse.ArgumentParser(description="Checkpoint validation script")
     parser.add_argument("--encoder", type=str, required=True, help="Path to the encoder checkpoint")
     parser.add_argument("--decoder", type=str, required=True, help="Path to the decoder checkpoint")
     parser.add_argument("--dataset", type=str, required=True, help="Path to the validation dataset")
