@@ -5,7 +5,7 @@ class Encoder(nn.Module):
     def __init__(self):
         super(Encoder, self).__init__()
         self.fc = nn.Sequential(
-            nn.Linear(30, 64),
+            nn.Linear(60, 64),
             nn.ReLU(inplace=True),
             nn.Linear(64, 64),
             nn.ReLU(inplace=True),

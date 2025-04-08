@@ -68,13 +68,21 @@ def evaluate_sf(n: int, device: torch.device) -> torch.Tensor:
 # Evaluate spherical harmonics of order 2 at the given points
 @torch.jit.script
 def evaluate_sh(ws: torch.Tensor) -> torch.Tensor:
-    ks = 0.28209479177387814, 0.4886025119029199
-    num_spherical_harmonic_basis = 4
+    ks = 0.28209479177387814, 0.4886025119029199, 1.0925484305920792, 0.31539156525252005, 0.5462742152960396
+    num_spherical_harmonic_basis = 9
     sh = torch.empty(ws.shape[:-1] + (num_spherical_harmonic_basis,), dtype=ws.dtype, device=ws.device)
+    # l = 0
     sh[..., 0] = ks[0]
+    # l = 1
     sh[..., 1] = -ks[1] * ws[..., 1]
     sh[..., 2] = ks[1] * ws[..., 2]
     sh[..., 3] = -ks[1] * ws[..., 0]
+    # l = 2
+    sh[..., 4] = ks[2] * ws[..., 0] * ws[..., 1]
+    sh[..., 5] = -ks[2] * ws[..., 1] * ws[..., 2]
+    sh[..., 6] = ks[3] * (3 * ws[..., 2] * ws[..., 2] - 1)
+    sh[..., 7] = -ks[2] * ws[..., 0] * ws[..., 2]
+    sh[..., 8] = ks[4] * (ws[..., 0] * ws[..., 0] - ws[..., 1] * ws[..., 1])
     return sh
 
 # Fit 2 order spherical harmonics coefficients to the given points

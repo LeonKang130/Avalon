@@ -85,41 +85,43 @@ def evaluate_aggregate(eigenvectors: torch.Tensor, eigenvalues: torch.Tensor, bs
 
 @torch.jit.script
 def generate_random_aggregate(u: torch.Tensor, force_specular: bool = False) -> Aggregate:
-    ws, ys = evaluate_sf(4, u.device) @ sample_onb_uniform(u[:3]).squeeze(0), u[3:27].reshape(4, 6)
+    num_spherical_harmonic_basis = 9
+    ws, ys = evaluate_sf(num_spherical_harmonic_basis, u.device) @ sample_onb_uniform(u[:3]).squeeze(0), u[3:57].reshape(num_spherical_harmonic_basis, 6)
     ys[..., 2].add_(1.0)
     if force_specular:
         ys[..., 1].clamp_max_(0.2)
     bsdf_sh_coefficients = fit_sh_coefficients(ws, ys)
-    eigenvectors = sample_onb_uniform(u[27:30]).squeeze(0)
-    eigenvalues = u[30:].clamp_min_(1e-6)
+    eigenvectors = sample_onb_uniform(u[57:60]).squeeze(0)
+    eigenvalues = u[60:].pow(6).clamp_min(1e-6)
+    eigenvalues /= eigenvalues.max()
     return Aggregate(eigenvectors, eigenvalues, bsdf_sh_coefficients)
 
 @timeit
 def generate_pretraining_dataset(num_aggregate: int, sphere_resolution: int, device: torch.device):
-    dataset = torch.empty(num_aggregate, sphere_resolution * sphere_resolution, 39, dtype=torch.float32)
+    dataset = torch.empty(num_aggregate, sphere_resolution * sphere_resolution, 69, dtype=torch.float32)
     print("Generating pretraining dataset...")
     sf_grid = evaluate_sf(sphere_resolution, device)
     for i in trange(num_aggregate):
-        aggregate = generate_random_aggregate(torch.rand(33, dtype=torch.float32, device=device))
-        dataset[i, ..., :30] = extract_aggregate_feature(*aggregate)
+        aggregate = generate_random_aggregate(torch.rand(63, dtype=torch.float32, device=device))
+        dataset[i, ..., :60] = extract_aggregate_feature(*aggregate)
         onb = sample_onb_uniform(torch.rand(2, 3, dtype=torch.float32, device=device))
         wi = torch.tile(sf_grid @ onb[0], (sphere_resolution, 1)) # 1, 1, 1,...
         wo = (sf_grid @ onb[1]).repeat(1, sphere_resolution).reshape(-1, 3)
-        dataset[i, ..., 30:33] = wi
-        dataset[i, ..., 33:36] = wo
-        dataset[i, ..., 36:] = evaluate_aggregate(*aggregate, wi, wo, 4096)
-    torch.save(dataset.reshape(-1, 39), f"dataset/pretrain.pt")
+        dataset[i, ..., 60:63] = wi
+        dataset[i, ..., 63:66] = wo
+        dataset[i, ..., 66:] = evaluate_aggregate(*aggregate, wi, wo, 4096)
+    torch.save(dataset.reshape(-1, 69), f"dataset/pretrain.pt")
 
 @timeit
 def generate_validation_dataset(square_resolution: int, device: torch.device):
-    aggregate = generate_random_aggregate(torch.rand(33, dtype=torch.float32, device=device), True)
+    aggregate = generate_random_aggregate(torch.rand(63, dtype=torch.float32, device=device))
     ws = generate_visualization_ws(square_resolution, device)
     image = evaluate_aggregate(*aggregate, ws[..., :3], ws[..., 3:], 1024)
     save_exr_image(image.reshape(square_resolution ** 2, square_resolution ** 2, -1), "dataset/reference.exr")
-    dataset = torch.empty(square_resolution ** 4, 39, dtype=torch.float32)
-    dataset[..., :30] = extract_aggregate_feature(*aggregate)
-    dataset[..., 30:36] = ws
-    dataset[..., 36:] = image
+    dataset = torch.empty(square_resolution ** 4, 69, dtype=torch.float32)
+    dataset[..., :60] = extract_aggregate_feature(*aggregate)
+    dataset[..., 60:66] = ws
+    dataset[..., 66:] = image
     torch.save(dataset, "dataset/validation.pt")
 
 def main():
